@@ -3,6 +3,7 @@ import {
   getDocs, 
   setDoc, 
   deleteDoc,
+  doc,
   DocumentReference,
   CollectionReference,
   Query
@@ -296,3 +297,42 @@ export async function safeGetDocs(queryRef: any): Promise<any> {
     forEach: (callback: any) => records.forEach(callback)
   };
 }
+
+/**
+ * Synchronizes all locally cached data to Cloud Firestore.
+ * This runs on app load and whenever needed to ensure that any
+ * offline-entered data gets successfully synced to the database.
+ */
+export async function syncLocalToCloud(db: any): Promise<{ success: boolean; syncedCount: number }> {
+  console.log('[SafeFirestore] Starting local-to-cloud synchronization...');
+  const collections = ['users', 'absensi', 'logbook', 'laporan', 'audit'];
+  let syncedCount = 0;
+
+  for (const collName of collections) {
+    try {
+      const localMap = getLocalMap(collName);
+      const entries = Object.entries(localMap);
+      if (entries.length === 0) continue;
+
+      console.log(`[SafeFirestore] Syncing collection "${collName}" with ${entries.length} items...`);
+      for (const [docId, data] of entries) {
+        if (!data || typeof data !== 'object') continue;
+        
+        try {
+          // Direct native Firestore call to bypass local cache interceptors
+          const docRef = doc(db, collName, docId);
+          await setDoc(docRef, data, { merge: true });
+          syncedCount++;
+        } catch (itemErr: any) {
+          console.warn(`[SafeFirestore] Failed to sync document "${collName}/${docId}":`, itemErr.message || itemErr);
+        }
+      }
+    } catch (collErr: any) {
+      console.warn(`[SafeFirestore] Failed to sync collection "${collName}":`, collErr.message || collErr);
+    }
+  }
+
+  console.log(`[SafeFirestore] Synchronization finished. Synced ${syncedCount} items to cloud.`);
+  return { success: true, syncedCount };
+}
+
