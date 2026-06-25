@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc } from 'firebase/firestore';
-import { safeGetDoc as getDoc, safeSetDoc as setDoc } from './utils/firestoreHelper';
+import { safeGetDoc as getDoc, safeSetDoc as setDoc, syncLocalToCloud } from './utils/firestoreHelper';
 import { UserProfile } from './types';
 import Navbar from './components/Navbar';
 import LoginForm from './components/LoginForm';
@@ -33,6 +33,18 @@ export default function App() {
   const showToast = (message: string, type: 'success' | 'error' | 'warning') => {
     setToast({ message, type });
   };
+
+  // Sync any offline/locally cached data to the cloud on application startup
+  useEffect(() => {
+    syncLocalToCloud(db).then(({ syncedCount }) => {
+      if (syncedCount > 0) {
+        console.log(`[Sync] Successfully uploaded ${syncedCount} offline entries to the cloud!`);
+        showToast(`Berhasil menyinkronkan ${syncedCount} data luring ke database cloud!`, 'success');
+      }
+    }).catch((err) => {
+      console.warn('[Sync] Initial synchronization failed:', err);
+    });
+  }, []);
 
   // Check user session on mount
   useEffect(() => {
